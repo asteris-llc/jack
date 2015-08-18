@@ -1,6 +1,6 @@
 # Jack
 
-**WARNING**: this README is highly asipriational. Almost none of this is
+**WARNING**: this README is highly aspirational. Almost none of this is
 implemented.
 
 Jack is a system for writing plugins in Go. A sample follows.
