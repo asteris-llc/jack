@@ -1,7 +1,13 @@
 package jack
 
-type Message struct {
+type Request struct {
+	ID     string
+	Method string
+	Args   []interface{}
+}
+
+type Response struct {
 	ID      string
-	Method  string
-	Payload []interface{}
+	Payload interface{}
+	Error   error
 }

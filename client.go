@@ -22,8 +22,8 @@ type Client struct {
 
 	// req/rep state
 	lock     sync.Mutex
-	messages chan *Message
-	waiting  map[string]chan *Message
+	messages chan *Request
+	waiting  map[string]chan *Response
 
 	// command state
 	path string
@@ -39,8 +39,8 @@ func NewClient(path string) *Client {
 		cancel:   cancel,
 		lock:     sync.Mutex{},
 		path:     path,
-		messages: make(chan *Message, 1),
-		waiting:  make(map[string]chan *Message),
+		messages: make(chan *Request, 1),
+		waiting:  make(map[string]chan *Response),
 	}
 }
 
@@ -92,17 +92,18 @@ func (c *Client) acceptRequests() {
 }
 
 func (c *Client) dispatchResponses() {
-	messages := make(chan *Message, 1)
-	go func(out chan *Message, src io.Reader) {
+	messages := make(chan *Response, 1)
+
+	go func(out chan *Response, src io.Reader) {
 		scanner := bufio.NewScanner(c.out)
 
 		for scanner.Scan() {
-			message := new(Message)
-			err := json.Unmarshal(scanner.Bytes(), message)
+			response := new(Response)
+			err := json.Unmarshal(scanner.Bytes(), response)
 			if err != nil {
 				panic(err) // TODO: more graceful failure
 			}
-			out <- message
+			out <- response
 		}
 	}(messages, c.out)
 
@@ -130,22 +131,22 @@ func (c *Client) Stop() {
 }
 
 func (c *Client) Call(method string, args ...interface{}) (interface{}, error) {
-	message := &Message{
-		ID:      uuid.NewRandom().String(),
-		Method:  method,
-		Payload: args,
+	message := &Request{
+		ID:     uuid.NewRandom().String(),
+		Method: method,
+		Args:   args,
 	}
 	c.messages <- message
 
 	// put our listener on the queue and listen for it
 	c.lock.Lock()
-	results := make(chan *Message, 1)
+	results := make(chan *Response, 1)
 	c.waiting[message.ID] = results
 	c.lock.Unlock()
 
 	select {
 	case result := <-results:
-		return result.Payload, nil
+		return result.Payload, result.Error
 
 	case <-c.context.Done():
 		return nil, ErrStopped
