@@ -21,7 +21,7 @@ type Client struct {
 	context context.Context
 
 	// req/rep state
-	lock     sync.RWMutex
+	lock     sync.Mutex
 	messages chan *Message
 	waiting  map[string]chan *Message
 
@@ -37,7 +37,7 @@ func NewClient(path string) *Client {
 	return &Client{
 		context:  context,
 		cancel:   cancel,
-		lock:     sync.RWMutex{},
+		lock:     sync.Mutex{},
 		path:     path,
 		messages: make(chan *Message, 1),
 		waiting:  make(map[string]chan *Message),
@@ -83,6 +83,7 @@ func (c *Client) acceptRequests() {
 			}
 			c.in.Write(blob)
 			c.in.Write(newline)
+
 		case <-c.context.Done():
 			c.in.Close()
 			return
@@ -94,6 +95,7 @@ func (c *Client) dispatchResponses() {
 	messages := make(chan *Message, 1)
 	go func(out chan *Message, src io.Reader) {
 		scanner := bufio.NewScanner(c.out)
+
 		for scanner.Scan() {
 			message := new(Message)
 			err := json.Unmarshal(scanner.Bytes(), message)
@@ -107,17 +109,14 @@ func (c *Client) dispatchResponses() {
 	for {
 		select {
 		case message := <-messages:
-			c.lock.RLock()
+			c.lock.Lock()
 			client, ok := c.waiting[message.ID]
 			if ok {
-				c.lock.RUnlock()
-				c.lock.Lock()
 				delete(c.waiting, message.ID)
-				c.lock.Unlock()
 				client <- message
-			} else {
-				c.lock.RUnlock()
 			}
+			c.lock.Unlock()
+
 		case <-c.context.Done():
 			c.out.Close()
 			return
@@ -147,6 +146,7 @@ func (c *Client) Call(method string, args ...interface{}) (interface{}, error) {
 	select {
 	case result := <-results:
 		return result.Payload, nil
+
 	case <-c.context.Done():
 		return nil, ErrStopped
 	}
