@@ -105,6 +105,11 @@ func (c *Client) dispatchResponses() {
 			}
 			out <- response
 		}
+
+		// we can get a deadlock pretty easily if we stop before everything is
+		// finished, so we need to stop the rest here when we exit. `Stop` should be
+		// OK with being called multiple times.
+		c.Stop()
 	}(messages, c.out)
 
 	for {
@@ -146,7 +151,7 @@ func (c *Client) Call(method string, args ...interface{}) (interface{}, error) {
 
 	select {
 	case result := <-results:
-		return result.Payload, result.Error
+		return result.Payload, errors.New(result.Error)
 
 	case <-c.context.Done():
 		return nil, ErrStopped
