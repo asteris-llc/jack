@@ -151,7 +151,11 @@ func (c *Client) Call(method string, args ...interface{}) (interface{}, error) {
 
 	select {
 	case result := <-results:
-		return result.Payload, errors.New(result.Error)
+		var err error
+		if result.Error != "" {
+			err = errors.New(result.Error)
+		}
+		return result.Payload, err
 
 	case <-c.context.Done():
 		return nil, ErrStopped
